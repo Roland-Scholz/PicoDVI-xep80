@@ -6,7 +6,6 @@
 #include "pico/stdlib.h"
 
 // TODO should put this in scratch_x, it out to fit...
-#include "font/font_8x8.h"
 #define FONT_CHAR_WIDTH 8
 #define FONT_CHAR_HEIGHT 8
 #define FONT_N_CHARS 128

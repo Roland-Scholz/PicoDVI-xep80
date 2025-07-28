@@ -12,7 +12,8 @@
 #define COLOR_RED 0x03
 #define COLOR_GREEN 0x0c
 #define COLOR_BLUE 0x30
-#define CURSOR_COLOR 0x16
+// #define CURSOR_COLOR 0x16
+#define CURSOR_COLOR 0x0c
 #define BCKG_COLOR 0x01
 #define FORE_COLOR 0x3f
 
@@ -51,7 +52,7 @@ static int lmargin = 0;	   /* location: $05 (R5) */
 static int rmargin = 0x4f; /* location: $06 (R6) */
 static int xscroll = 0;	   /* location: $1f (RAM bank 1 R7) */
 /* 25 pointers to start of data for each line. Originally at locations $20..$38. */
-static char *line_pointers[XEP80_HEIGHT];
+char *line_pointers[XEP80_HEIGHT + 1];
 static int old_ypos = 0;		/* location: $39 */
 static int old_xpos = 0;		/* location: $3a */
 static int list_mode = false;	/* location: $3b */
@@ -74,28 +75,29 @@ static int font_b_blank = false;
 static int font_b_blink = false;
 
 /* TCP */
-static int cursor_on = true; /* byte 13 */
-static int graphics_mode = false;
-static int pal_mode = false;
+int cursor_on = true; /* byte 13 */
+int graphics_mode = false;
+int pal_mode = false;
 
 /* VCR*/
 static int blink_reverse = false;	 /* bit 0 */
-static int cursor_blink = false;	 /* bit 1 */
+int cursor_blink = false;			 /* bit 1 */
 static int cursor_overwrite = false; /* bit 2 */
 static int inverse_mode = false;	 /* bit 3 */
-static int char_set = CHAR_SET_A;	 /* bits 6-7 */
+int char_set = CHAR_SET_A;	 		/* bits 6-7 */
 
 /* CURS */
-static int cursor_x = 0;
-static int cursor_y = 0;
+int cursor_x = 0;
+int cursor_y = 0;
 static int curs = 0; /* Address of cursor in video RAM, $0000..$1fff */
 
 #define XEP80_TEXT_ROWS
-#define VIDEO_RAM_SIZE 256 * XEP80_HEIGHT
+// #define VIDEO_RAM_SIZE 256 * XEP80_HEIGHT
+#define VIDEO_RAM_SIZE 8192
 
-static char video_ram[VIDEO_RAM_SIZE]; /* 8 KB of RAM */
+char video_ram[VIDEO_RAM_SIZE]; /* 8 KB of RAM */
 #define char_data(y, x) (*(line_pointers[(y)] + (x)))
-#define graph_data(y, x) (video_ram[(y)*XEP80_GRAPH_WIDTH / 8 + (x)])
+#define graph_data(y, x) (video_ram[(y) * XEP80_GRAPH_WIDTH / 8 + (x)])
 
 static char tab_stops[256];
 
@@ -104,10 +106,11 @@ char blink_cursor_color = CURSOR_COLOR;
 
 char bufx[80];
 
+void UpdateCursor(void);
+
 static inline void log_send(char *str)
 {
-	uart_8n1_tx_send("\e[1;31m");
-	uart_8n1_tx_send(str);
+	printf("\e[1;31m%s", str);
 #ifdef SHOW_LOG_ON_SCREEN
 	x_set_colour(COLOR_BLUE, 0);
 	x_print(str);
@@ -117,8 +120,7 @@ static inline void log_send(char *str)
 }
 static inline void log_receive(char *str)
 {
-	uart_8n1_tx_send("\e[1;32m");
-	uart_8n1_tx_send(str);
+	printf("\e[1;32m%s", str);
 #ifdef SHOW_LOG_ON_SCREEN
 	x_set_colour(COLOR_RED, 0);
 	x_print(str);
@@ -127,14 +129,12 @@ static inline void log_receive(char *str)
 }
 static inline void log_info(char *str)
 {
-	uart_8n1_tx_send("\r\n\e[0m");
-	uart_8n1_tx_send(str);
+	printf("\r\n\e[0m%s", str);
 
 #ifdef SHOW_LOG_ON_SCREEN
 	x_set_colour(COLOR_GREEN, 0);
 	x_print(str);
 #endif
-	//	printf(str);
 }
 
 static void __not_in_flash("format_log") format_log(uint16_t c)
@@ -162,19 +162,25 @@ static void __not_in_flash("SendResponse") SendResponse(uint16_t c)
 	}
 	uart_9n1_tx_program_putc(pio1, 0x01, c);
 	format_log(c);
-	log_send(bufx);
+	// log_send(bufx);
 }
 
-
-void __not_in_flash("HandleBlink") HandleBlink(){
-	if (cursor_blink) {
-		if ( blink_cursor_color== cursor_color){
+void __not_in_flash("HandleBlink") HandleBlink()
+{
+	return;
+	if (cursor_blink)
+	{
+		if (blink_cursor_color == cursor_color)
+		{
 			blink_cursor_color = BCKG_COLOR;
-		} else {
+		}
+		else
+		{
 			blink_cursor_color = cursor_color;
 		}
-
-	} else {
+	}
+	else
+	{
 		blink_cursor_color = cursor_color;
 	}
 	UpdateCursor();
@@ -221,9 +227,11 @@ void __not_in_flash("UpdateCursor") UpdateCursor(void)
 		/* Redraw cursor at new location */
 		BlitChar(xpos, ypos, true);
 	}
+
 	cursor_x = xpos;
 	cursor_y = ypos;
 	curs = line_pointers[ypos] + xpos - video_ram;
+
 #ifdef STATUS_LINE_POSY
 	sprintf(bufx, "pos: %02d, %02d margins:%02d-%02d   ", xpos, ypos, lmargin, rmargin);
 	x_print_at(0, STATUS_LINE_POSY, bufx);
@@ -255,6 +263,7 @@ static void __not_in_flash("BlitRows") BlitRows(int y_start, int y_end)
 	}
 }
 
+/*
 static void BlitGraphChar(int x, int y)
 {
 	// int graph_col;
@@ -289,6 +298,7 @@ static void BlitGraphChar(int x, int y)
 	// 	}
 	// }
 }
+*/
 
 static void BlitGraphScreen(void)
 {
@@ -383,6 +393,11 @@ void ColdStart(void)
 		for (i = 0; i < XEP80_HEIGHT; ++i)
 			line_pointers[i] = video_ram + 0x100 * i;
 	}
+
+#ifdef STATUS_LINE_POSY
+	line_pointers[XEP80_HEIGHT] = &charbuf[STATUS_LINE_POSY * CHAR_COLS];
+#endif
+
 	ypos = 0;
 
 	FillMem(XEP80_ATARI_EOL);
@@ -482,33 +497,37 @@ static void InsertLine(void)
    ROM location: 05cb */
 static void AdvanceCursor(char prev_char_under_cursor)
 {
-	if (xpos != rmargin)
+	if (!graphics_mode)
 	{
-		++xpos;
-		UpdateCursor();
-		return;
-	}
-	if (ypos == (XEP80_HEIGHT - 2))
-	{ /* last non-status line */
-		ScrollScreenUpCursorToLeftMargin();
-		UpdateCursor();
-		return;
-	}
-	if (ypos == (XEP80_HEIGHT - 1))
-	{
+		if (xpos != rmargin)
+		{
+			++xpos;
+			UpdateCursor();
+			return;
+		}
+		if (ypos == (XEP80_HEIGHT - 2))
+		{ /* last non-status line */
+			ScrollScreenUpCursorToLeftMargin();
+			UpdateCursor();
+			return;
+		}
+		if (ypos == (XEP80_HEIGHT - 1))
+		{
+			xpos = 0;
+			UpdateCursor();
+			return;
+		}
+		++ypos;
+		if (prev_char_under_cursor == XEP80_ATARI_EOL)
+		{
+			InsertLine();
+			return;
+		}
 		xpos = 0;
 		UpdateCursor();
-		return;
 	}
-	++ypos;
-	if (prev_char_under_cursor == XEP80_ATARI_EOL)
-	{
-		InsertLine();
-		return;
-	}
-	xpos = 0;
-	UpdateCursor();
 }
+
 
 /* Add ATASCII character BYTE at cursor position, and advance the cursor.
    ROM location: 05c3 */
@@ -764,7 +783,7 @@ static void DeleteLogicalLine(void)
 /* Reverses bit order of a byte. Bytes have to be reversed in graphics mode,
    because NS405 displays graphics from LSB (left) to MSB (right).
    ROM location: 02d7 */
-static char ReverseByte(unsigned long int b)
+char ReverseByte(unsigned long int b)
 {
 	return ((b * 0x0802LU & 0x22110LU) | (b * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16;
 }
@@ -773,14 +792,19 @@ static char ReverseByte(unsigned long int b)
    ROM location: 0296 */
 static void AddGraphCharAtCursor(char byte)
 {
-	int y = (curs & 0x1fff) / (XEP80_GRAPH_WIDTH / 8);
-	video_ram[curs & 0x1fff] = ReverseByte(byte);
+	// int y = (curs & 0x1fff) / (XEP80_GRAPH_WIDTH / 8);
 
-	if (y < XEP80_GRAPH_HEIGHT)
-	{
-		BlitGraphChar((curs & 0x1fff) % (XEP80_GRAPH_WIDTH / 8), y);
-	}
-	curs = (curs + 1) & 0xffff;
+	//printf("curs: %d %03X\n", curs, byte);
+	video_ram[curs & 0x1fff] = ReverseByte(byte);
+//	video_ram[curs & 0x1fff] = byte;
+
+	/*
+		if (y < XEP80_GRAPH_HEIGHT)
+		{
+			BlitGraphChar((curs & 0x1fff) % (XEP80_GRAPH_WIDTH / 8), y);
+		}
+	*/
+	curs = (curs + 1) & 0x1fff;
 }
 
 /* Process receiving of a character (ie. not a command).
@@ -794,7 +818,10 @@ static void ReceiveChar(char byte)
 		 * to the existing P: driver. */
 	}
 	else if (graphics_mode)
+	{
+		//printf("graphics_mode\n");
 		AddGraphCharAtCursor(byte);
+	}
 	else if (byte == XEP80_ATARI_EOL)
 		AddEOL();
 	else if (escape_mode || list_mode)
@@ -815,6 +842,7 @@ static void ReceiveChar(char byte)
 	}
 	else
 	{
+		//printf("shoudn't be here\n");
 		switch (byte)
 		{
 		case 0x1c: /* Cursor Up */
@@ -872,7 +900,7 @@ static void ReceiveChar(char byte)
    ROM location: 0311 */
 static void SetXCur(char new_xpos)
 {
-	xpos = old_xpos = new_xpos;
+	xpos = old_xpos = new_xpos & 0x7f;
 	UpdateCursor();
 }
 
@@ -934,6 +962,8 @@ static void SetGraphics60Hz(void)
    ROM location: 02cd */
 static void SetGraphics50Hz(void)
 {
+	SetGraphics60Hz();
+
 	pal_mode = true;
 	//	UpdateTVSystem();
 	BlitGraphScreen();
@@ -1196,7 +1226,7 @@ void __not_in_flash("ReceiveWord") ReceiveWord(uint16_t word)
 	sync_time = get_absolute_time();
 	char byte = word & 0xFF;
 	format_log(word);
-	log_receive(bufx);
+	//log_receive(bufx);
 
 	/* Is it a command or data word? */
 	if (word & 0x100)
@@ -1411,7 +1441,8 @@ void __not_in_flash("ReceiveWord") ReceiveWord(uint16_t word)
 	{
 		last_char = byte;
 		ReceiveChar(byte);
-		if (!burst_mode)
+		if (!burst_mode) {
 			SendCursorStatus();
+		}	
 	}
 }

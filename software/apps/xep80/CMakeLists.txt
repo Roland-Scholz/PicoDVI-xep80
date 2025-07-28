@@ -1,5 +1,6 @@
 add_executable(xep80
 	main.c
+	cvideo.c
 	tmds_encode_font_2bpp.S
 	tmds_encode_font_2bpp.h
 	xep80.c
@@ -9,8 +10,11 @@ add_executable(xep80
 
 pico_generate_pio_header(xep80 ${CMAKE_CURRENT_LIST_DIR}/uart_9n1_rx.pio)
 pico_generate_pio_header(xep80 ${CMAKE_CURRENT_LIST_DIR}/uart_9n1_tx.pio)
-pico_generate_pio_header(xep80 ${CMAKE_CURRENT_LIST_DIR}/uart_8n1_tx.pio)
+pico_generate_pio_header(xep80 ${CMAKE_CURRENT_LIST_DIR}/cvideo_sync.pio)
 
+#pico_generate_pio_header(xep80 ${CMAKE_CURRENT_LIST_DIR}/uart_8n1_tx.pio)
+
+#target_compile_options(xep80 no-error=implicit-function-declaration)
 
 target_compile_definitions(xep80 PRIVATE
 	DVI_VERTICAL_REPEAT=1
@@ -28,6 +32,7 @@ target_link_libraries(xep80
 	pico_multicore
 	libdvi
 	hardware_pio
+	pico_runtime
 )
 
 # create map/bin/hex file etc.

@@ -58,7 +58,7 @@
 #define XEP80_WIDTH 256
 #define XEP80_HEIGHT 25
 #define XEP80_CHAR_WIDTH 7
-#define XEP80_MAX_CHAR_HEIGHT 12
+#define XEP80_MAX_CHAR_HEIGHT   
 #define XEP80_GRAPH_WIDTH 320
 #define XEP80_GRAPH_HEIGHT 200
 #define XEP80_LINE_LEN 80
@@ -79,4 +79,5 @@
 void ReceiveWord(uint16_t word);
 void ColdStart(void);
 void HandleBlink(void);
+char ReverseByte(unsigned long int b);
 #endif
