@@ -73,7 +73,7 @@
 #define XEP80_FONTS_UNDER_ROW 9
 
 #define CHAR_VERT_FACTOR 2
-#define STATUS_LINE_POSY 29
+//#define STATUS_LINE_POSY 29
 
 
 void ReceiveWord(uint16_t word);
