@@ -6,6 +6,14 @@ add_executable(xep80
 	xep80.c
 	gfx.c
 	uart_log.c
+	picoterm_conio.c
+	picoterm_core.c
+	common/picoterm_config.c
+	common/picoterm_conio_config.c
+	common/picoterm_dec.c
+	#common/picoterm_stdio.c
+	common/picoterm_cursor.c
+	common/picoterm_stddef.c
 )
 
 pico_generate_pio_header(xep80 ${CMAKE_CURRENT_LIST_DIR}/uart_9n1_rx.pio)
@@ -25,6 +33,9 @@ target_compile_definitions(xep80 PRIVATE
 target_compile_definitions(xep80 PRIVATE
 	DVI_DEFAULT_SERIAL_CONFIG=${DVI_DEFAULT_SERIAL_CONFIG}
 	PICO_CORE1_STACK_SIZE=0x200
+	COLUMNS=80
+	ROWS=25
+	VISIBLEROWS=25
 	)
 
 target_link_libraries(xep80

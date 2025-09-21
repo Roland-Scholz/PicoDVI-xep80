@@ -33,6 +33,8 @@
 #include "cvideo_sync.pio.h" // The assembled PIO code
 
 #include "xep80.h"
+//#include "picoterm_core.h"
+#include "picoterm_conio.h"
 
 // PIO pio_0;                      // The PIO that this uses
 uint offset_0; // Program offsets
@@ -45,6 +47,7 @@ uint vblank_count; // Vblank counter
 bool cursor_onoff = true;
 int cursor_frame_cnt = 0;
 
+extern uint term_type;
 extern int cursor_x;
 extern int cursor_y;
 extern int cursor_on;
@@ -55,6 +58,8 @@ extern char video_ram[];
 extern int char_set;
 extern char atari_font[];
 extern char atari_font_int[];
+extern array_of_row_text_pointer ptr;
+extern picoterm_conio_config_t conio_config;
 
 char __attribute__((aligned(4))) hsync[232];
 char __attribute__((aligned(4))) vsync[232];
@@ -159,13 +164,22 @@ void __not_in_flash("generate_line") generate_line(char *buffer)
 
     unsigned int screenline = bline >> 3;
     unsigned int charline = bline % 8;
-    char *pscreen = line_pointers[screenline];
+    char *pscreen;
     char *charset;
     char c;
     int x;
 
     if (!graphics_mode || bline >= 200)
     {
+        if (term_type == 0)
+        {
+            pscreen = line_pointers[screenline];
+        }
+        else
+        {
+            pscreen = (char *)ptr[screenline]->slot;
+        }
+
         if (char_set == CHAR_SET_A)
         {
             charset = atari_font;
@@ -181,10 +195,20 @@ void __not_in_flash("generate_line") generate_line(char *buffer)
             //        c = pc_atari_font[(pscreen[x] << 3) + charline];
             //        c = font_8x8[(pscreen[x] << 3) + charline];
 
-            if (cursor_on && !graphics_mode && cursor_x == x && cursor_y == screenline)
+            if (term_type == 0)
             {
-                if (!cursor_blink || (cursor_blink && cursor_onoff))
+                if (cursor_on && !graphics_mode && cursor_x == x && cursor_y == screenline)
+                {
+                    if (!cursor_blink || (cursor_blink && cursor_onoff))
+                        c = ~c;
+                }
+            }
+            else
+            {
+                if (conio_config.cursor.pos.x == x && conio_config.cursor.pos.y == screenline)
+                {
                     c = ~c;
+                }
             }
 
             *buffer = mapping[c >> 4];
@@ -339,7 +363,7 @@ void __not_in_flash("cvideo_dma_handler") cvideo_dma_handler(void)
             break;
         }
     }
-    else    //NTSC
+    else // NTSC
     {
         switch (vline)
         {

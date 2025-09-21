@@ -31,6 +31,7 @@
 #define CMD_FILL_PREV 0xC4
 #define CMD_FILL_SPACE 0xC5
 #define CMD_FILL_EOL 0xC6
+#define CMD_SWITCH_VT100 0xCF
 #define CMD_CLR_LIST 0xD0
 #define CMD_SET_LIST 0xD1
 #define CMD_SCR_NORMAL 0xD2
@@ -80,4 +81,5 @@ void ReceiveWord(uint16_t word);
 void ColdStart(void);
 void HandleBlink(void);
 char ReverseByte(unsigned long int b);
+void BlitChar(int x, int y, int cur);
 #endif

@@ -5,6 +5,7 @@
 #include "xep80.h"
 #include "gfx.h"
 #include "uart_log.h"
+#include "picoterm_core.h"
 
 #define OFFSET_X 0
 #define OFFSET_Y 2
@@ -105,6 +106,9 @@ char cursor_color = CURSOR_COLOR;
 char blink_cursor_color = CURSOR_COLOR;
 
 char bufx[80];
+
+extern uint term_type;
+extern int curx, cury;
 
 void UpdateCursor(void);
 
@@ -412,6 +416,8 @@ void ColdStart(void)
 			x_set_colour_at(x, y + OFFSET_Y, FORE_COLOR, BCKG_COLOR);
 		}
 	}
+
+	term_type = 0;
 
 	BlitCharScreen();
 }
@@ -1414,6 +1420,13 @@ void __not_in_flash("ReceiveWord") ReceiveWord(uint16_t word)
 				case CMD_BLK_ON_WHT:
 					log_info("BLK_ON_WHT");
 					SetInverse(true);
+					break;
+				case CMD_SWITCH_VT100:
+					log_info("SWITCH_VT100");
+					term_type = 1;
+					char_set = CHAR_SET_B;
+					terminal_reset();
+					curx = cury = 0;
 					break;
 				default:
 					log_info("UNHANDLED");

@@ -30,6 +30,9 @@
 #include "atari_int_8x8.h"
 #include "tmds_encode.h"
 
+#include "picoterm_core.h"
+#include "picoterm_conio.h"
+
 struct dvi_inst dvi0;
 
 PIO pio = pio1;
@@ -43,7 +46,15 @@ PIO pio = pio1;
 #define XEP80_STOP_BITS 1
 #define XEP80_PARITY UART_PARITY_NONE
 
+#define CURSOR_COLOR 0x0c
+#define BCKG_COLOR 0x01
+#define FORE_COLOR 0x3f
+
 uint frame_cnt = 0;
+uint term_type = 0;
+int curx = 0, cury = 0;
+
+
 char buf[30];
 
 // DVI fonts only 1k, inverse is handeled elsewhere
@@ -53,6 +64,8 @@ __attribute__((aligned(4))) char font_8x8[1024];
 extern int char_set;
 extern char video_ram[];
 extern int graphics_mode;
+extern array_of_row_text_pointer ptr;
+extern picoterm_conio_config_t conio_config;
 
 static __attribute__((aligned(4))) char map[] = {
 	0x00,
@@ -94,7 +107,15 @@ void __not_in_flash("process_loop") process_loop()
 		if (uart_9n1_rx_program_avail(pio, XEP80_UART_SM))
 		{
 			uint16_t c = uart_9n1_rx_program_getc(pio, XEP80_UART_SM);
-			ReceiveWord(c);
+
+			if (term_type == 0 || c >= 256)
+			{
+				ReceiveWord(c);
+			}
+			else
+			{
+				handle_new_character((unsigned char)(c & 0xff));
+			}
 		}
 #ifdef STATUS_LINE_POSY
 		sprintf(buf, "frame: %09d", frame_cnt);
@@ -104,12 +125,16 @@ void __not_in_flash("process_loop") process_loop()
 	__builtin_unreachable();
 }
 
-void core1_main()
+void __not_in_flash("core1_main") core1_main()
 {
 	char *charset;
+	char *cbuf;
+	char blanks[80];
+	int i, j, row;
+
 	__attribute__((aligned(4))) char line[80], c;
 
-	int i, j;
+	memset(blanks, 32, sizeof(blanks));
 
 	dvi_register_irqs_this_core(&dvi0, DMA_IRQ_0);
 	dvi_start(&dvi0);
@@ -124,17 +149,43 @@ void core1_main()
 			charset = font_int_8x8;
 		}
 
+		if (term_type == 1)
+		{
+			x_set_colour_at(curx, cury + 2, FORE_COLOR, BCKG_COLOR);
+			x_set_colour_at(conio_config.cursor.pos.x, conio_config.cursor.pos.y + 2, FORE_COLOR, CURSOR_COLOR);
+			curx = conio_config.cursor.pos.x;
+			cury = conio_config.cursor.pos.y;
+		}
+		
 		for (uint y = 0; y < FRAME_HEIGHT; ++y)
 		{
 			uint32_t *tmdsbuf;
 			queue_remove_blocking(&dvi0.q_tmds_free, &tmdsbuf);
+
+			row = y / CHAR_VERT_FACTOR / FONT_CHAR_HEIGHT;
+
+			if (term_type == 0)
+			{
+				cbuf = &charbuf[row * CHAR_COLS];
+			}
+			else
+			{
+				if (row < 2 || row >= 27)
+				{
+					cbuf = blanks;
+				}
+				else
+				{
+					cbuf = (char *)ptr[row - 2]->slot;
+				}
+			}
 
 			if (!graphics_mode || (y >= 400))
 			{
 				for (int plane = 0; plane < 3; ++plane)
 				{
 					tmds_encode_font_2bpp(
-						(const uint8_t *)&charbuf[(y / CHAR_VERT_FACTOR) / FONT_CHAR_HEIGHT * CHAR_COLS],
+						(const unsigned char *)cbuf,
 						&colourbuf[(y / CHAR_VERT_FACTOR) / FONT_CHAR_HEIGHT * (COLOUR_PLANE_SIZE_WORDS / CHAR_ROWS) + plane * COLOUR_PLANE_SIZE_WORDS],
 						tmdsbuf + plane * (FRAME_WIDTH / DVI_SYMBOLS_PER_WORD),
 						FRAME_WIDTH,
@@ -214,6 +265,9 @@ int __not_in_flash("main") main()
 	dvi_init(&dvi0, next_striped_spin_lock_num(), next_striped_spin_lock_num());
 
 	printf("DVI enabled \n");
+
+	terminal_init();
+	terminal_reset();
 
 	for (y = 0; y < CHAR_ROWS; ++y)
 	{
