@@ -4,8 +4,7 @@
 #include "pico/stdlib.h"
 #include "xep80.h"
 #include "gfx.h"
-#include "uart_log.h"
-#include "picoterm_core.h"
+#include "libtsm.h"
 
 #define OFFSET_X 0
 #define OFFSET_Y 2
@@ -85,7 +84,7 @@ static int blink_reverse = false;	 /* bit 0 */
 int cursor_blink = false;			 /* bit 1 */
 static int cursor_overwrite = false; /* bit 2 */
 static int inverse_mode = false;	 /* bit 3 */
-int char_set = CHAR_SET_A;	 		/* bits 6-7 */
+int char_set = CHAR_SET_A;			 /* bits 6-7 */
 
 /* CURS */
 int cursor_x = 0;
@@ -108,7 +107,7 @@ char blink_cursor_color = CURSOR_COLOR;
 char bufx[80];
 
 extern uint term_type;
-extern int curx, cury;
+extern struct tsm_vte *out;
 
 void UpdateCursor(void);
 
@@ -333,6 +332,22 @@ static void FillMem(char c)
 {
 	memset(video_ram, c, VIDEO_RAM_SIZE);
 }
+
+static void clear()
+{
+	int x, y;
+	for (y = 0; y < CHAR_ROWS; ++y)
+	{
+		for (x = 0; x < CHAR_COLS; ++x)
+		{
+			x_set_char(x, y, ' ');
+			if (y == 26)
+				x_set_colour_at(x, y, 0, 255);
+			else
+				x_set_colour_at(x, y, 255, 0);
+		}
+	}
+}
 /* Initialise the XEP80.
    ROM location: 001f, 0056 */
 void ColdStart(void)
@@ -533,7 +548,6 @@ static void AdvanceCursor(char prev_char_under_cursor)
 		UpdateCursor();
 	}
 }
-
 
 /* Add ATASCII character BYTE at cursor position, and advance the cursor.
    ROM location: 05c3 */
@@ -800,9 +814,9 @@ static void AddGraphCharAtCursor(char byte)
 {
 	// int y = (curs & 0x1fff) / (XEP80_GRAPH_WIDTH / 8);
 
-	//printf("curs: %d %03X\n", curs, byte);
+	// printf("curs: %d %03X\n", curs, byte);
 	video_ram[curs & 0x1fff] = ReverseByte(byte);
-//	video_ram[curs & 0x1fff] = byte;
+	//	video_ram[curs & 0x1fff] = byte;
 
 	/*
 		if (y < XEP80_GRAPH_HEIGHT)
@@ -825,7 +839,7 @@ static void ReceiveChar(char byte)
 	}
 	else if (graphics_mode)
 	{
-		//printf("graphics_mode\n");
+		// printf("graphics_mode\n");
 		AddGraphCharAtCursor(byte);
 	}
 	else if (byte == XEP80_ATARI_EOL)
@@ -848,7 +862,7 @@ static void ReceiveChar(char byte)
 	}
 	else
 	{
-		//printf("shoudn't be here\n");
+		// printf("shoudn't be here\n");
 		switch (byte)
 		{
 		case 0x1c: /* Cursor Up */
@@ -1232,7 +1246,7 @@ void __not_in_flash("ReceiveWord") ReceiveWord(uint16_t word)
 	sync_time = get_absolute_time();
 	char byte = word & 0xFF;
 	format_log(word);
-	//log_receive(bufx);
+	// log_receive(bufx);
 
 	/* Is it a command or data word? */
 	if (word & 0x100)
@@ -1425,8 +1439,9 @@ void __not_in_flash("ReceiveWord") ReceiveWord(uint16_t word)
 					log_info("SWITCH_VT100");
 					term_type = 1;
 					char_set = CHAR_SET_B;
-					terminal_reset();
-					curx = cury = 0;
+					clear();
+					tsm_vte_reset(out);
+					strcpy(&charbuf[26 * CHAR_COLS], "VT100   9600 7O1 ");
 					break;
 				default:
 					log_info("UNHANDLED");
@@ -1454,8 +1469,9 @@ void __not_in_flash("ReceiveWord") ReceiveWord(uint16_t word)
 	{
 		last_char = byte;
 		ReceiveChar(byte);
-		if (!burst_mode) {
+		if (!burst_mode)
+		{
 			SendCursorStatus();
-		}	
+		}
 	}
 }

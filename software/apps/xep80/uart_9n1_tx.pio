@@ -19,6 +19,9 @@ bitloop:                   ; This loop will run 8 times (8n1 UART)
 
 % c-sdk {
 #include "hardware/clocks.h"
+#define XEP80_LED_FRAMES 5
+extern int tx_led_cnt;
+
 
 static inline void uart_9n1_tx_program_init(PIO pio, uint sm, uint offset, uint pin_tx, uint baud) {
     // Tell PIO to initially drive output-high on the selected pin, then map PIO
@@ -51,6 +54,7 @@ static inline void uart_9n1_tx_program_init(PIO pio, uint sm, uint offset, uint 
 
 static inline void uart_9n1_tx_program_putc(PIO pio, uint sm, uint16_t c) {
     pio_sm_put_blocking(pio, sm, (uint32_t)c);
+    tx_led_cnt = XEP80_LED_FRAMES;
 }
 
 static inline void uart_9n1_tx_program_puts(PIO pio, uint sm, const char *s) {

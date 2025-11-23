@@ -5,15 +5,12 @@ add_executable(xep80
 	tmds_encode_font_2bpp.h
 	xep80.c
 	gfx.c
-	uart_log.c
-	picoterm_conio.c
-	picoterm_core.c
-	common/picoterm_config.c
-	common/picoterm_conio_config.c
-	common/picoterm_dec.c
-	#common/picoterm_stdio.c
-	common/picoterm_cursor.c
-	common/picoterm_stddef.c
+	tsm_screen.c
+	tsm_vte.c
+	tsm_unicode.c
+	tsm_vte_charsets.c
+	shl_htable.c
+	wcwidth.c
 )
 
 pico_generate_pio_header(xep80 ${CMAKE_CURRENT_LIST_DIR}/uart_9n1_rx.pio)

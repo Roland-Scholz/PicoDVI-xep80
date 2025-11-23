@@ -5,6 +5,7 @@
 #pragma once
 
 #include "hardware/clocks.h"
+#include "libtsm.h"
 
 // 14.5 Mhz pixelclock
 // 928 pixels per line
@@ -32,7 +33,7 @@
 
 #define CURSOR_TIME 25
 
-void initialise_cvideo(PIO);
+void initialise_cvideo(PIO, struct tsm_screen *);
 void wait_vblank(void);
 void printchar(char c);
 

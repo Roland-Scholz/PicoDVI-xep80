@@ -33,8 +33,7 @@
 #include "cvideo_sync.pio.h" // The assembled PIO code
 
 #include "xep80.h"
-//#include "picoterm_core.h"
-#include "picoterm_conio.h"
+#include "vt100_font_8x8.h"
 
 // PIO pio_0;                      // The PIO that this uses
 uint offset_0; // Program offsets
@@ -46,20 +45,6 @@ uint bline;         // Line in the bitmap to fetch
 uint vblank_count; // Vblank counter
 bool cursor_onoff = true;
 int cursor_frame_cnt = 0;
-
-extern uint term_type;
-extern int cursor_x;
-extern int cursor_y;
-extern int cursor_on;
-extern int cursor_blink;
-extern int graphics_mode;
-extern int pal_mode;
-extern char video_ram[];
-extern int char_set;
-extern char atari_font[];
-extern char atari_font_int[];
-extern array_of_row_text_pointer ptr;
-extern picoterm_conio_config_t conio_config;
 
 char __attribute__((aligned(4))) hsync[232];
 char __attribute__((aligned(4))) vsync[232];
@@ -106,7 +91,40 @@ short __attribute__((aligned(4))) bit_mapping[] = {
 char *pline0 = line0;
 char *pline1 = line1;
 
-extern char *line_pointers[XEP80_HEIGHT];
+extern uint term_type;
+extern int cursor_x;
+extern int cursor_y;
+extern int cursor_on;
+extern int cursor_blink;
+extern int graphics_mode;
+extern int pal_mode;
+extern char video_ram[];
+extern int char_set;
+extern char atari_font[];
+extern char atari_font_int[];
+extern char *line_pointers[];
+extern char charbuf[];
+
+struct tsm_screen *vte_con;
+
+struct cell
+{
+    tsm_symbol_t ch;
+    unsigned int width;
+    struct tsm_screen_attr attr;
+    tsm_age_t age;
+};
+
+struct line
+{
+    struct line *next;
+    struct line *prev;
+
+    unsigned int size;
+    struct cell *cells;
+    uint64_t sb_id;
+    tsm_age_t age;
+};
 
 /*
 void rearange_font(char *font, char* buffer) {
@@ -168,32 +186,39 @@ void __not_in_flash("generate_line") generate_line(char *buffer)
     char *charset;
     char c;
     int x;
+    struct line **lines = NULL;
+    struct line *line = NULL;
+
+    lines = tsm_screen_get_lines(vte_con);
+    line = NULL;
 
     if (!graphics_mode || bline >= 200)
     {
+
         if (term_type == 0)
         {
             pscreen = line_pointers[screenline];
+            if (char_set == CHAR_SET_A)
+            {
+                charset = atari_font;
+            }
+            else
+            {
+                charset = atari_font_int;
+            }
         }
         else
         {
-            pscreen = (char *)ptr[screenline]->slot;
-        }
+            pscreen = &charbuf[(screenline + 2) * WIDTH];
+            charset = (char *)&vt100_font_8x8;
 
-        if (char_set == CHAR_SET_A)
-        {
-            charset = atari_font;
-        }
-        else
-        {
-            charset = atari_font_int;
+            if (tsm_screen_get_height(vte_con) > screenline && lines)
+                line = lines[screenline];
         }
 
         for (x = 0; x < WIDTH; x++)
         {
             c = charset[(pscreen[x] << 3) + charline];
-            //        c = pc_atari_font[(pscreen[x] << 3) + charline];
-            //        c = font_8x8[(pscreen[x] << 3) + charline];
 
             if (term_type == 0)
             {
@@ -205,8 +230,14 @@ void __not_in_flash("generate_line") generate_line(char *buffer)
             }
             else
             {
-                if (conio_config.cursor.pos.x == x && conio_config.cursor.pos.y == screenline)
+                if (tsm_screen_get_cursor_x(vte_con) == x && tsm_screen_get_cursor_y(vte_con) == screenline)
                 {
+                    c = ~c;
+                }
+
+                if (line && line->size > x && line->cells[x].attr.inverse)
+                {
+
                     c = ~c;
                 }
             }
@@ -235,10 +266,12 @@ void __not_in_flash("generate_line") generate_line(char *buffer)
 /*
  * The main routine sets up the whole shebang
  */
-void __not_in_flash("initialise_cvideo") initialise_cvideo(PIO pio)
+void __not_in_flash("initialise_cvideo") initialise_cvideo(PIO pio, struct tsm_screen *con)
 {
     // pio_0 = pio0;	                    // Assign the PIO
     double divisor;
+
+    vte_con = con;
 
     generate_synclines();
 
@@ -320,7 +353,6 @@ void __not_in_flash("cvideo_dma_handler") cvideo_dma_handler(void)
             break;
         case 3:
             dma_channel_set_read_addr(dma_channel_0, vsync, true);
-
             pline0 = line0;
             pline1 = line1;
             bline = 0;
